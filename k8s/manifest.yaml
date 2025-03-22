@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
       - name: labelify
-        image: lucianocarvalho/labelify:main
+        image: lucianoajunior/labelify:main
         ports:
         - containerPort: 8080
         volumeMounts:
@@ -42,4 +42,19 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: labelify-config 
+          name: labelify-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: labelify
+  namespace: labelify
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: labelify 

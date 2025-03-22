@@ -101,11 +101,41 @@ docker run -d \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
   lucianoajunior/labelify:main
 ```
-> **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/
+> **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/.
 
 ### Using Kubernetes
 
-TBD
+Simply run:
+
+```bash
+curl -s https://raw.githubusercontent.com/lucianocarvalho/labelify/main/k8s/manifest.yaml | kubectl apply -f -
+```
+
+You should see output like this:
+```  
+namespace/labelify created
+configmap/labelify-config created
+deployment.apps/labelify created
+service/labelify created
+```
+
+Feel free to browse the resources:
+
+```bash
+kubectl get all -n labelify
+```
+
+> **⚠️ Important:** Don't forget to configure your prometheus url inside the `configmap/labelify-config`. The default configuration in this example is just proxying queries to http://prometheus.monitoring.svc.cluster.local:9090/.
+
+After configuring it correctly you can test it by running a command like this:
+
+```bash
+# Port-forwarding
+kubectl port-forward service/labelify -n labelify 8080:80
+
+# Testing the proxy
+curl -XGET http://localhost:8080/api/v1/query?query=time()
+```
 
 ## License
 
