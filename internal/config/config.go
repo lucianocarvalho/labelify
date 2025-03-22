@@ -9,10 +9,10 @@ import (
 )
 
 type Config struct {
-	PrometheusURL string          `yaml:"prometheus_url"`
-	Port          string          `yaml:"port"`
-	RulesPath     string          `yaml:"rules_path"`
-	Rules         *domain.RuleSet `yaml:"rules"`
+	PrometheusURL string         `yaml:"prometheus_url"`
+	Port          string         `yaml:"port"`
+	ConfigPath    string         `yaml:"config_path"`
+	Config        *domain.Config `yaml:"config"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -29,31 +29,38 @@ func LoadConfig(path string) (*Config, error) {
 	return &config, nil
 }
 
-func LoadRules(path string) (*domain.RuleSet, error) {
-	log.Printf("Loading rules from file: %s", path)
+func LoadLabelifyConfig(path string) (*domain.Config, error) {
+	log.Printf("Loading Labelify config from file: %s", path)
 
 	f, err := os.Open(path)
 	if err != nil {
-		log.Printf("Error opening rules file: %v", err)
+		log.Printf("Error opening config file: %v", err)
 		return nil, err
 	}
 	defer f.Close()
 
-	var rs domain.RuleSet
+	var config domain.Config
 	decoder := yaml.NewDecoder(f)
-	err = decoder.Decode(&rs)
+	err = decoder.Decode(&config)
 	if err != nil {
-		log.Printf("Error decoding rules: %v", err)
+		log.Printf("Error decoding config: %v", err)
 		return nil, err
 	}
 
-	log.Printf("Rules loaded successfully. Total rules: %d", len(rs.Rules))
-	for i, rule := range rs.Rules {
-		log.Printf("Rule %d: Name=%s, Type=%s, Label=%s",
-			i+1, rule.Name, rule.Mutate.Type, rule.Mutate.TargetLabel)
+	log.Printf("Config loaded successfully. Total sources: %d, Total rules: %d",
+		len(config.Sources), len(config.Enrichment.Rules))
+
+	for i, source := range config.Sources {
+		log.Printf("Source %d: Name=%s, Type=%s, Mappings=%d",
+			i+1, source.Name, source.Type, len(source.Mappings))
 	}
 
-	return &rs, nil
+	for i, rule := range config.Enrichment.Rules {
+		log.Printf("Rule %d: Metric=%s, Label=%s, EnrichFrom=%s",
+			i+1, rule.Match.Metric, rule.Match.Label, rule.EnrichFrom)
+	}
+
+	return &config, nil
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

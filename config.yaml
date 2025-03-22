@@ -1,0 +1,28 @@
+sources:
+  - name: static_map
+    type: yaml
+    mappings:
+      # Using exact match for coredns
+      coredns:
+        labels:
+          team: networking
+          business_unit: platform
+
+      # Using wildcard to match all prometheus deployments
+      prometheus-.*:
+        labels:
+          team: observability
+          business_unit: platform
+
+enrichment:
+  rules:
+    - match:
+        metric: "kube_deployment_spec_replicas"
+        label: "deployment"
+      enrich_from: static_map
+      add_labels:
+        - team
+        - business_unit
+      fallback:
+        team: "unknown"
+        business_unit: "n/a"

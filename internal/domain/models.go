@@ -1,24 +1,34 @@
 package domain
 
-type RuleSet struct {
-	Rules []Rule `json:"rules" yaml:"rules"`
+type Config struct {
+	Sources    []Source   `json:"sources" yaml:"sources"`
+	Enrichment Enrichment `json:"enrichment" yaml:"enrichment"`
 }
 
-type Rule struct {
-	Name   string     `json:"name" yaml:"name"`
-	Mutate MutateRule `json:"mutate" yaml:"mutate"`
+type Source struct {
+	Name     string                `json:"name" yaml:"name"`
+	Type     string                `json:"type" yaml:"type"`
+	Mappings map[string]SourceData `json:"mappings" yaml:"mappings"`
 }
 
-type MutateRule struct {
-	Type         string    `json:"type" yaml:"type"`
-	Matchers     []Matcher `json:"matchers" yaml:"matchers"`
-	TargetLabel  string    `json:"targetLabel" yaml:"target_label"`
-	DefaultValue string    `json:"defaultValue" yaml:"default_value"`
+type SourceData struct {
+	Labels map[string]string `json:"labels" yaml:"labels"`
 }
 
-type Matcher struct {
-	MatchLabels map[string]string `json:"match_labels" yaml:"match_labels"`
-	Value       string            `json:"value" yaml:"value"`
+type Enrichment struct {
+	Rules []EnrichmentRule `json:"rules" yaml:"rules"`
+}
+
+type EnrichmentRule struct {
+	Match      MatchRule         `json:"match" yaml:"match"`
+	EnrichFrom string            `json:"enrich_from" yaml:"enrich_from"`
+	AddLabels  []string          `json:"add_labels" yaml:"add_labels"`
+	Fallback   map[string]string `json:"fallback" yaml:"fallback"`
+}
+
+type MatchRule struct {
+	Metric string `json:"metric" yaml:"metric"`
+	Label  string `json:"label" yaml:"label"`
 }
 
 type PrometheusResponse struct {

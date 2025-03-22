@@ -17,36 +17,53 @@ Let's suppose you have a series of replicas running on your cluster:
 ```
 $ sum(kube_deployment_spec_replicas) by (deployment)
 
-{deployment="microservice-1"}           1
-{deployment="microservice-2"}           1
-{deployment="microservice-3"}           1
-{deployment="prometheus"}               1
-{deployment="coredns"}                  1
+{deployment="microservice-1"}                             1
+{deployment="microservice-2"}                             1
+{deployment="microservice-3"}                             1
+{deployment="prometheus-grafana"}                         1
+{deployment="prometheus-kube-prometheus-operator"}        1
+{deployment="coredns"}                                    1
 ```
 
 And you intend to write Labelify rules to group deployments by team:
 
 ```yml
-rules:
-  - mutate:
-      type: "static"
-      target_label: "team"
-      default_value: "engineering-team"
-      matchers:
-        - match:
-            deployment: "prometheus"
-          replace: "observability-team"
-        - match:
-            deployment: "coredns"
-          replace: "networking-team"
+sources:
+  - name: static_map
+    type: yaml
+    mappings:
+      # Using exact match for coredns
+      coredns:
+        labels:
+          team: networking
+          business_unit: platform
+
+      # Using wildcard to match all prometheus deployments
+      prometheus-.*:
+        labels:
+          team: observability
+          business_unit: platform
+
+enrichment:
+  rules:
+    - match:
+        metric: "kube_deployment_spec_replicas"
+        label: "deployment"
+      enrich_from: static_map
+      add_labels:
+        - team
+        - business_unit
+      fallback:
+        team: "unknown"
+        business_unit: "n/a"
 ```
 
 Enriched response from Labelify:
 
 ```
-{team="engineering-team"}       3
-{team="observability-team"}     1
-{team="networking-team"}        1
+{team="observability", business_unit="platform"}        2
+{team="networking", business_unit="platform"}           1
+{team="unknown", business_unit="n/a"}                   3
 ```
 
 Now your dashboards and alerts can group deployments by responsible team, without needing to change how metrics are collected or creating label replace rules.

@@ -15,12 +15,12 @@ func main() {
 		log.Fatalf("Error loading config.yaml: %v", err)
 	}
 
-	rules, err := config.LoadRules(cfg.RulesPath)
+	labelifyConfig, err := config.LoadLabelifyConfig(cfg.ConfigPath)
 	if err != nil {
-		log.Fatalf("Error loading rules.yaml: %v", err)
+		log.Fatalf("Error loading Labelify config: %v", err)
 	}
 
-	hydrate := usecase.NewHydrateUseCase(rules)
+	hydrate := usecase.NewHydrateUseCase(labelifyConfig)
 
 	proxy, err := infrastructure.NewProxy(cfg.PrometheusURL, hydrate)
 	if err != nil {

@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/lucianocarvalho/labelify/internal/domain"
 )
 
 type HydrateUseCase struct {
-	rules *domain.RuleSet
+	config *domain.Config
 }
 
-func NewHydrateUseCase(rules *domain.RuleSet) *HydrateUseCase {
+func NewHydrateUseCase(config *domain.Config) *HydrateUseCase {
 	return &HydrateUseCase{
-		rules: rules,
+		config: config,
 	}
 }
 
@@ -32,29 +35,59 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	log.Printf("Result type: %s", resp.Data.ResultType)
 	log.Printf("Number of results: %d", len(resp.Data.Result))
 
-	for _, rule := range h.rules.Rules {
-		log.Printf("Evaluating rule: %s", rule.Name)
-		log.Printf("Mutation type: %s", rule.Mutate.Type)
+	for _, rule := range h.config.Enrichment.Rules {
+		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
+
+		// Find the source for this rule
+		var source *domain.Source
+		for _, s := range h.config.Sources {
+			if s.Name == rule.EnrichFrom {
+				source = &s
+				break
+			}
+		}
+		if source == nil {
+			log.Printf("Source %s not found for rule", rule.EnrichFrom)
+			continue
+		}
 
 		for i, r := range resp.Data.Result {
-			log.Printf("Processing metric %d: %v", i+1, r.Metric)
-			found := false
+			// Check if this metric matches our rule
+			if !h.matchesMetric(r.Metric, rule.Match, originalQuery) {
+				continue
+			}
 
-			for _, matcher := range rule.Mutate.Matchers {
-				log.Printf("Trying to match with: %v", matcher.MatchLabels)
-				if h.matchEnrichment(r.Metric, matcher.MatchLabels) {
-					log.Printf("Match found! Adding label %s=%s",
-						rule.Mutate.TargetLabel, matcher.Value)
-					resp.Data.Result[i].Metric[rule.Mutate.TargetLabel] = matcher.Value
-					found = true
+			// Get the label value to match against
+			labelValue := r.Metric[rule.Match.Label]
+			if labelValue == "" {
+				continue
+			}
+
+			// Try to find a matching mapping
+			var matchedData *domain.SourceData
+			for pattern, data := range source.Mappings {
+				if pattern == labelValue {
+					matchedData = &data
+					break
+				}
+				// Try wildcard match
+				if matched, _ := regexp.MatchString(pattern, labelValue); matched {
+					matchedData = &data
 					break
 				}
 			}
 
-			if !found && rule.Mutate.DefaultValue != "" {
-				log.Printf("No match found, using default value: %s",
-					rule.Mutate.DefaultValue)
-				resp.Data.Result[i].Metric[rule.Mutate.TargetLabel] = rule.Mutate.DefaultValue
+			// Apply the matched data or fallback
+			if matchedData != nil {
+				for _, label := range rule.AddLabels {
+					if value, ok := matchedData.Labels[label]; ok {
+						resp.Data.Result[i].Metric[label] = value
+					}
+				}
+			} else {
+				for label, value := range rule.Fallback {
+					resp.Data.Result[i].Metric[label] = value
+				}
 			}
 		}
 	}
@@ -63,12 +96,23 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	case "matrix":
 		groupedMetrics := make(map[string][][]interface{})
 		for _, r := range resp.Data.Result {
-			team, ok := r.Metric["team"]
-			if !ok {
+			// Get all labels that we want to group by
+			groupKey := make(map[string]string)
+			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
+				if value, ok := r.Metric[label]; ok {
+					groupKey[label] = value
+				}
+			}
+
+			// Skip if we don't have any labels to group by
+			if len(groupKey) == 0 {
 				continue
 			}
 
-			if values, exists := groupedMetrics[team]; exists {
+			// Create a unique key for this group
+			groupKeyStr := h.createGroupKey(groupKey)
+
+			if values, exists := groupedMetrics[groupKeyStr]; exists {
 				for i, v := range r.Values {
 					if i >= len(values) {
 						values = append(values, v)
@@ -79,16 +123,26 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 					}
 				}
 			} else {
-				groupedMetrics[team] = r.Values
+				groupedMetrics[groupKeyStr] = r.Values
 			}
 		}
 
 		var newResult []domain.MetricData
-		for team, values := range groupedMetrics {
+		for groupKey, values := range groupedMetrics {
+			// Parse the group key back into a map
+			metric := make(map[string]string)
+			for _, pair := range strings.Split(groupKey, ",") {
+				if pair == "" {
+					continue
+				}
+				parts := strings.Split(pair, "=")
+				if len(parts) == 2 {
+					metric[parts[0]] = parts[1]
+				}
+			}
+
 			newResult = append(newResult, domain.MetricData{
-				Metric: map[string]string{
-					"team": team,
-				},
+				Metric: metric,
 				Values: values,
 			})
 		}
@@ -97,27 +151,48 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	case "vector":
 		groupedMetrics := make(map[string][]interface{})
 		for _, r := range resp.Data.Result {
-			team, ok := r.Metric["team"]
-			if !ok {
+			// Get all labels that we want to group by
+			groupKey := make(map[string]string)
+			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
+				if value, ok := r.Metric[label]; ok {
+					groupKey[label] = value
+				}
+			}
+
+			// Skip if we don't have any labels to group by
+			if len(groupKey) == 0 {
 				continue
 			}
 
-			if value, exists := groupedMetrics[team]; exists {
+			// Create a unique key for this group
+			groupKeyStr := h.createGroupKey(groupKey)
+
+			if value, exists := groupedMetrics[groupKeyStr]; exists {
 				val1, _ := strconv.Atoi(r.Value[1].(string))
 				val2, _ := strconv.Atoi(value[1].(string))
 				value[1] = strconv.Itoa(val1 + val2)
 			} else {
-				groupedMetrics[team] = r.Value
+				groupedMetrics[groupKeyStr] = r.Value
 			}
 		}
 
 		var newResult []domain.MetricData
-		for team, value := range groupedMetrics {
+		for groupKey, value := range groupedMetrics {
+			// Parse the group key back into a map
+			metric := make(map[string]string)
+			for _, pair := range strings.Split(groupKey, ",") {
+				if pair == "" {
+					continue
+				}
+				parts := strings.Split(pair, "=")
+				if len(parts) == 2 {
+					metric[parts[0]] = parts[1]
+				}
+			}
+
 			newResult = append(newResult, domain.MetricData{
-				Metric: map[string]string{
-					"team": team,
-				},
-				Value: value,
+				Metric: metric,
+				Value:  value,
 			})
 		}
 		resp.Data.Result = newResult
@@ -126,14 +201,23 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	return json.Marshal(resp)
 }
 
-func (h *HydrateUseCase) matchEnrichment(metric, matchLabels map[string]string) bool {
-	for k, v := range matchLabels {
-		val, ok := metric[k]
-		if !ok || val != v {
-			log.Printf("No match: %s=%s (expected: %s)", k, val, v)
-			return false
-		}
-		log.Printf("Match: %s=%s", k, v)
+func (h *HydrateUseCase) matchesMetric(metric map[string]string, match domain.MatchRule, query string) bool {
+	// Verifica se a métrica está presente na query original
+	return strings.Contains(query, match.Metric)
+}
+
+func (h *HydrateUseCase) createGroupKey(groupKey map[string]string) string {
+	// Ordena as chaves para garantir consistência
+	keys := make([]string, 0, len(groupKey))
+	for k := range groupKey {
+		keys = append(keys, k)
 	}
-	return true
+	sort.Strings(keys)
+
+	// Cria a chave ordenada
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", k, groupKey[k]))
+	}
+	return strings.Join(parts, ",")
 }
