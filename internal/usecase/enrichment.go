@@ -12,28 +12,44 @@ import (
 	"github.com/lucianocarvalho/labelify/internal/domain"
 )
 
-type HydrateUseCase struct {
+type EnrichmentUseCase struct {
 	config *domain.Config
 }
 
-func NewHydrateUseCase(config *domain.Config) *HydrateUseCase {
-	return &HydrateUseCase{
+func NewEnrichmentUseCase(config *domain.Config) *EnrichmentUseCase {
+	return &EnrichmentUseCase{
 		config: config,
 	}
 }
 
-func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, error) {
-	log.Printf("Executing hydration for query: '%s'", originalQuery)
+func (h *EnrichmentUseCase) hasApplicableRules(query string, resp domain.QueryResponse) bool {
+	for _, rule := range h.config.Enrichment.Rules {
+		if !strings.Contains(query, rule.Match.Metric) {
+			continue
+		}
 
-	var resp domain.PrometheusResponse
+		for _, r := range resp.Data.Result {
+			if _, ok := r.Metric[rule.Match.Label]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, error) {
+	var resp domain.QueryResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		log.Printf("Error unmarshaling: %v", err)
-		return nil, fmt.Errorf("response incompatible with PrometheusResponse")
+		// Probably not a query response, just returning
+		return body, nil
 	}
 
-	log.Printf("Response status: %s", resp.Status)
-	log.Printf("Result type: %s", resp.Data.ResultType)
-	log.Printf("Number of results: %d", len(resp.Data.Result))
+	if !h.hasApplicableRules(originalQuery, resp) {
+		// Nothing to do, no applicable rules found, just returning
+		return body, nil
+	}
+
+	log.Printf("Found applicable rules for query for query '%s': ", originalQuery)
 
 	for _, rule := range h.config.Enrichment.Rules {
 		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
@@ -45,6 +61,7 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				break
 			}
 		}
+
 		if source == nil {
 			log.Printf("Source %s not found for rule", rule.EnrichFrom)
 			continue
@@ -55,7 +72,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				continue
 			}
 
-			// Get the label value to match against
 			labelValue := r.Metric[rule.Match.Label]
 			if labelValue == "" {
 				continue
@@ -91,7 +107,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	case "matrix":
 		groupedMetrics := make(map[string][][]interface{})
 		for _, r := range resp.Data.Result {
-			// Get all labels that we want to group by
 			groupKey := make(map[string]string)
 			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
 				if value, ok := r.Metric[label]; ok {
@@ -99,12 +114,10 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				}
 			}
 
-			// Skip if we don't have any labels to group by
 			if len(groupKey) == 0 {
 				continue
 			}
 
-			// Create a unique key for this group
 			groupKeyStr := h.createGroupKey(groupKey)
 
 			if values, exists := groupedMetrics[groupKeyStr]; exists {
@@ -124,7 +137,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 
 		var newResult []domain.MetricData
 		for groupKey, values := range groupedMetrics {
-			// Parse the group key back into a map
 			metric := make(map[string]string)
 			for _, pair := range strings.Split(groupKey, ",") {
 				if pair == "" {
@@ -146,7 +158,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	case "vector":
 		groupedMetrics := make(map[string][]interface{})
 		for _, r := range resp.Data.Result {
-			// Get all labels that we want to group by
 			groupKey := make(map[string]string)
 			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
 				if value, ok := r.Metric[label]; ok {
@@ -158,7 +169,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				continue
 			}
 
-			// Create a unique key for this group
 			groupKeyStr := h.createGroupKey(groupKey)
 
 			if value, exists := groupedMetrics[groupKeyStr]; exists {
@@ -194,12 +204,11 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	return json.Marshal(resp)
 }
 
-func (h *HydrateUseCase) matchesMetric(metric map[string]string, match domain.MatchRule, query string) bool {
+func (h *EnrichmentUseCase) matchesMetric(metric map[string]string, match domain.MatchRule, query string) bool {
 	return strings.Contains(query, match.Metric)
 }
 
-func (h *HydrateUseCase) createGroupKey(groupKey map[string]string) string {
-	// Ordena as chaves para garantir consistência
+func (h *EnrichmentUseCase) createGroupKey(groupKey map[string]string) string {
 	keys := make([]string, 0, len(groupKey))
 	for k := range groupKey {
 		keys = append(keys, k)

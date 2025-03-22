@@ -45,7 +45,7 @@ type MatchRule struct {
 	Label  string `json:"label" yaml:"label"`
 }
 
-type PrometheusResponse struct {
+type QueryResponse struct {
 	Status string `json:"status" yaml:"status"`
 	Data   struct {
 		ResultType string       `json:"resultType" yaml:"result_type"`

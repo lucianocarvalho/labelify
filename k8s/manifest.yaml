@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
       - name: labelify
-        image: lucianoajunior/labelify:main
+        image: lucianoajunior/labelify:latest
         ports:
         - containerPort: 8080
         volumeMounts:

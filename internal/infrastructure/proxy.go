@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -14,71 +13,56 @@ import (
 	"github.com/lucianocarvalho/labelify/internal/usecase"
 )
 
-type contextKey string
-
-const queryKey contextKey = "originalQuery"
-
 type Proxy struct {
-	proxy   *httputil.ReverseProxy
-	hydrate *usecase.HydrateUseCase
+	proxy      *httputil.ReverseProxy
+	enrichment *usecase.EnrichmentUseCase
 }
 
-func NewProxy(targetURL string, hydrate *usecase.HydrateUseCase) (*Proxy, error) {
+func NewProxy(targetURL string, enrichment *usecase.EnrichmentUseCase) (*Proxy, error) {
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Proxy{
-		proxy:   httputil.NewSingleHostReverseProxy(target),
-		hydrate: hydrate,
+		proxy:      httputil.NewSingleHostReverseProxy(target),
+		enrichment: enrichment,
 	}, nil
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// If the path is not /api/v1/query or /api/v1/query_range, serve the request as is
+	if r.URL.Path != "/api/v1/query" && r.URL.Path != "/api/v1/query_range" {
+		p.proxy.ServeHTTP(w, r)
+		return
+	}
+
 	query := r.URL.Query().Get("query")
-	log.Printf("Query recebida no proxy: '%s'", query)
-
-	ctx := context.WithValue(r.Context(), queryKey, query)
-	r = r.WithContext(ctx)
-
-	p.proxy.ServeHTTP(w, r)
-}
-
-func (p *Proxy) SetupModifyResponse() {
 	p.proxy.ModifyResponse = func(resp *http.Response) error {
 		var body []byte
 		var err error
 
+		// Prometheus uses a gzip compression for the response body
 		if resp.Header.Get("Content-Encoding") == "gzip" {
 			reader, err := gzip.NewReader(resp.Body)
 			if err != nil {
-				log.Printf("Erro ao criar gzip reader: %v", err)
 				return err
 			}
 			defer reader.Close()
 			body, err = io.ReadAll(reader)
 			if err != nil {
-				log.Printf("Erro ao ler body gzip: %v", err)
 				return err
 			}
 			resp.Header.Del("Content-Encoding")
 		} else {
 			body, err = io.ReadAll(resp.Body)
 			if err != nil {
-				log.Printf("Erro ao ler body: %v", err)
 				return err
 			}
 		}
 		resp.Body.Close()
 
-		query := ""
-		if val := resp.Request.Context().Value(queryKey); val != nil {
-			query = val.(string)
-		}
-		log.Printf("Query recuperada do contexto: '%s'", query)
-
-		newBody, err := p.hydrate.Execute(body, query)
+		newBody, err := p.enrichment.Execute(body, query)
 		if err != nil {
 			log.Printf("Erro ao executar hidratação: %v", err)
 			newBody = body
@@ -87,7 +71,8 @@ func (p *Proxy) SetupModifyResponse() {
 		resp.Body = io.NopCloser(bytes.NewReader(newBody))
 		resp.ContentLength = int64(len(newBody))
 		resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
-
 		return nil
 	}
+
+	p.proxy.ServeHTTP(w, r)
 }

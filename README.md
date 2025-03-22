@@ -99,7 +99,7 @@ You can quickly get started using Docker:
 docker run -d \
   -p 8080:8080 \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
-  lucianoajunior/labelify:main
+  lucianoajunior/labelify:latest
 ```
 > **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/.
 
