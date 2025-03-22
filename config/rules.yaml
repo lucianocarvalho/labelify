@@ -1,0 +1,12 @@
+rules:
+  - mutate:
+      type: "static"
+      target_label: "team"
+      default_value: "other"
+      matchers:
+        - match_labels:
+            deployment: "prometheus-grafana"
+          value: "observability-team"
+        - match_labels:
+            deployment: "coredns"
+          value: "networking-team"
