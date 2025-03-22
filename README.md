@@ -21,13 +21,13 @@ And you intend to write Labelify rules to group deployments by team:
 ```yml
 rules:
   - mutate:
-      type: "static"                            # We currently only support static lists
-      target_label: "team"                      # Name of the label to inject to all PromQL result
-      default_value: "engineering-team"         # Fallback value if no matcher condition is satisfied
+      type: "static"
+      target_label: "team"
+      default_value: "engineering-team"
       matchers:
-        - match:                                # Match condition for all key-value pairs match the metric labels
+        - match:
             deployment: "prometheus"
-          replace: "observability-team"         # Inject this value into the `target_label` label
+          replace: "observability-team"
         - match:
             deployment: "coredns"
           replace: "networking-team"
