@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/labelify-logo-dark-mode.svg">
     <source media="(prefers-color-scheme: light)" srcset="./.github/assets/labelify-logo-light-mode.svg">
-    <img alt="Logo" src="./.github/assets/labelify-logo-dark-mode.svg" width="200">
+    <img alt="Logo" src="./.github/assets/labelify-logo-light-mode.svg" width="300">
   </picture>
 </p>
 
