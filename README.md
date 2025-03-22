@@ -1,6 +1,6 @@
 # Labelify
 
-Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment  — enabling more insightful dashboards, smarter alerts, and clearer operational context, without modifying your original metrics or ingestion configs.
+Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment, enabling more insightful dashboards, smarter alerts, and clearer operational context - without modifying your original metrics or creating ingestion configs.
 
 ## What does Labelify do?
 
@@ -58,3 +58,7 @@ We currently support both result type: [instant vectors](https://prometheus.io/d
 - Static mappings (defined in config.yaml)
 - External APIs (coming soon)
 - Other prometheus queries (coming soon)
+
+## License
+
+This library is licensed under the [MIT License](LICENSE).
