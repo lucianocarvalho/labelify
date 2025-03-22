@@ -70,6 +70,8 @@ Now your dashboards and alerts can group deployments by responsible team, withou
 
 We currently support both [instant vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#instant-vectors) and [range vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#range-vectors).
 
+If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy, — forwarding any query without interfering in your results.
+
 ## Features
 
 **What Labelify can do (and what’s coming soon):**
