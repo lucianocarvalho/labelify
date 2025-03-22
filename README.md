@@ -1,6 +1,6 @@
 # Labelify
 
-**Labelify** is a lightweight Prometheus proxy that injects labels into PromQL query results — enabling more insightful dashboards, smarter alerts, and clearer operational context, without modifying your original metrics or ingestion configs.
+Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment  — enabling more insightful dashboards, smarter alerts, and clearer operational context, without modifying your original metrics or ingestion configs.
 
 ## What does Labelify do?
 
@@ -44,3 +44,17 @@ Enriched response from Labelify:
 Now your dashboards and alerts can group deployments by responsible team, without needing to change how metrics are collected or creating label replace rules.
 
 We currently support both result type: [instant vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#instant-vectors) and [range vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#range-vectors).
+
+## Features
+
+**What Labelify can do (and what’s coming soon):**
+
+- Create new labels into your query results
+- Aggregate results dynamically based in your current labels
+- Creating conditions using expressions and templates (coming soon)
+
+**Supported data for rules:**
+
+- Static mappings (defined in config.yaml)
+- External APIs (coming soon)
+- Other prometheus queries (coming soon)
