@@ -1,0 +1,5 @@
+config:
+  prometheus:
+    url: "http://prometheus:9090/"
+  server:
+    port: 8080

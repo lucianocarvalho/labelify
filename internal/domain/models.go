@@ -1,8 +1,22 @@
 package domain
 
 type Config struct {
-	Sources    []Source   `json:"sources" yaml:"sources"`
-	Enrichment Enrichment `json:"enrichment" yaml:"enrichment"`
+	Config     ServerConfig `json:"config" yaml:"config"`
+	Sources    []Source     `json:"sources" yaml:"sources"`
+	Enrichment Enrichment   `json:"enrichment" yaml:"enrichment"`
+}
+
+type ServerConfig struct {
+	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Server     PortConfig       `json:"server" yaml:"server"`
+}
+
+type PrometheusConfig struct {
+	URL string `json:"url" yaml:"url"`
+}
+
+type PortConfig struct {
+	Port int `json:"port" yaml:"port"`
 }
 
 type Source struct {

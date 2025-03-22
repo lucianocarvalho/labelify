@@ -35,21 +35,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	log.Printf("Result type: %s", resp.Data.ResultType)
 	log.Printf("Number of results: %d", len(resp.Data.Result))
 
-	// Verifica se alguma regra dá match com a query
-	hasMatchingRule := false
-	for _, rule := range h.config.Enrichment.Rules {
-		if h.matchesMetric(resp.Data.Result[0].Metric, rule.Match, originalQuery) {
-			hasMatchingRule = true
-			break
-		}
-	}
-
-	// Se não houver regra que dê match, retorna a resposta original
-	if !hasMatchingRule {
-		log.Printf("No matching rules found for query: '%s', returning original response", originalQuery)
-		return body, nil
-	}
-
 	for _, rule := range h.config.Enrichment.Rules {
 		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
 

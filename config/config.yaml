@@ -1,4 +1,0 @@
-prometheus_url: "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/"
-port: "8080"
-config_path: "config.yaml"
-rules_path: "config/rules.yaml" 

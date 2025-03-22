@@ -10,7 +10,7 @@
 
 Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment, enabling more insightful dashboards, smarter alerts, and clearer operational context - without modifying your original metrics or creating ingestion configs.
 
-## What does Labelify do?
+## 💡 What does Labelify do?
 
 Let's suppose you have a series of replicas running on your cluster:
 
@@ -68,11 +68,11 @@ Enriched response from Labelify:
 
 Now your dashboards and alerts can group deployments by responsible team, without needing to change how metrics are collected or creating label replace rules.
 
+If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results.
+
 We currently support both [instant vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#instant-vectors) and [range vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#range-vectors).
 
-If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy, — forwarding any query without interfering in your results.
-
-## Features
+## ✨ Features
 
 **What Labelify can do (and what’s coming soon):**
 
@@ -85,6 +85,34 @@ If no rule matches the executed query, seamlessly falls back to acting as a tran
 - Static mappings (defined in config.yaml)
 - External APIs (coming soon)
 - Other prometheus queries (coming soon)
+
+# 🚀 Installation
+
+There are various ways of installing Labelify.
+
+### Using Docker
+
+You can quickly get started using Docker:
+
+```bash
+# Start by cloning the repository:
+git clone https://github.com/lucianocarvalho/labelify.git
+cd labelify
+
+# Build the image
+docker build -t lucianocarvalho/labelify .
+
+# Run the container as a proxy
+docker run -d \
+  -p 8080:8080 \
+  -v ./examples/config.yaml:/etc/labelify/config.yaml \
+  lucianocarvalho/labelify:latest
+```
+> **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/
+
+### Using Kubernetes
+
+TBD
 
 ## License
 

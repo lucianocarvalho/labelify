@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -10,19 +11,18 @@ import (
 )
 
 func main() {
-	cfg, err := config.LoadConfig("config/config.yaml")
+	// Parse flags
+	flags := config.ParseFlags()
+
+	// Carrega a configuração do arquivo especificado
+	cfg, err := config.LoadLabelifyConfig(flags.ConfigFile)
 	if err != nil {
-		log.Fatalf("Error loading config.yaml: %v", err)
+		log.Fatalf("Error loading config from %s: %v", flags.ConfigFile, err)
 	}
 
-	labelifyConfig, err := config.LoadLabelifyConfig(cfg.ConfigPath)
-	if err != nil {
-		log.Fatalf("Error loading Labelify config: %v", err)
-	}
+	hydrate := usecase.NewHydrateUseCase(cfg)
 
-	hydrate := usecase.NewHydrateUseCase(labelifyConfig)
-
-	proxy, err := infrastructure.NewProxy(cfg.PrometheusURL, hydrate)
+	proxy, err := infrastructure.NewProxy(cfg.Config.Prometheus.URL, hydrate)
 	if err != nil {
 		log.Fatalf("Error creating proxy: %v", err)
 	}
@@ -31,6 +31,6 @@ func main() {
 
 	http.Handle("/", proxy)
 
-	log.Printf("Proxy listening on http://localhost:%s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, nil))
+	log.Printf("Proxy listening on http://localhost:%d", cfg.Config.Server.Port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", cfg.Config.Server.Port), nil))
 }
