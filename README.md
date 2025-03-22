@@ -137,6 +137,17 @@ kubectl port-forward service/labelify -n labelify 8080:80
 curl -XGET http://localhost:8080/api/v1/query?query=time()
 ```
 
+### Running locally
+
+```bash
+# Start by cloning the repository:
+git clone https://github.com/lucianocarvalho/labelify.git
+cd labelify
+
+# Running main.go
+go run cmd/api/main.go --config.file="$(PWD)/examples/config.yaml"
+```
+
 ## License
 
 This library is licensed under the [MIT License](LICENSE).
