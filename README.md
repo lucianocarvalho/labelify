@@ -95,18 +95,11 @@ There are various ways of installing Labelify.
 You can quickly get started using Docker:
 
 ```bash
-# Start by cloning the repository:
-git clone https://github.com/lucianocarvalho/labelify.git
-cd labelify
-
-# Build the image
-docker build -t lucianocarvalho/labelify .
-
 # Run the container as a proxy
 docker run -d \
   -p 8080:8080 \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
-  lucianocarvalho/labelify:latest
+  lucianoajunior/labelify:main
 ```
 > **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/
 

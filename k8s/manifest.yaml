@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: labelify
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: labelify-config
+  namespace: labelify
+data:
+  config.yaml: |
+    config:
+      prometheus:
+        url: "http://prometheus.monitoring.svc.cluster.local:9090/"
+      server:
+        port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: labelify
+  namespace: labelify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: labelify
+  template:
+    metadata:
+      labels:
+        app: labelify
+    spec:
+      containers:
+      - name: labelify
+        image: lucianocarvalho/labelify:main
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config
+          mountPath: /etc/labelify
+      volumes:
+      - name: config
+        configMap:
+          name: labelify-config 
