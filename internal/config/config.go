@@ -8,27 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
-	PrometheusURL string         `yaml:"prometheus_url"`
-	Port          string         `yaml:"port"`
-	ConfigPath    string         `yaml:"config_path"`
-	Config        *domain.Config `yaml:"config"`
-}
-
-func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
-}
-
 func LoadLabelifyConfig(path string) (*domain.Config, error) {
 	log.Printf("Loading Labelify config from file: %s", path)
 
@@ -61,11 +40,4 @@ func LoadLabelifyConfig(path string) (*domain.Config, error) {
 	}
 
 	return &config, nil
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

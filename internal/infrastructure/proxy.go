@@ -35,7 +35,6 @@ func NewProxy(targetURL string, hydrate *usecase.HydrateUseCase) (*Proxy, error)
 	}, nil
 }
 
-// ServeHTTP implementa a interface http.Handler
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")
 	log.Printf("Query recebida no proxy: '%s'", query)
@@ -46,7 +45,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.proxy.ServeHTTP(w, r)
 }
 
-// SetupModifyResponse configura a modificação da resposta
 func (p *Proxy) SetupModifyResponse() {
 	p.proxy.ModifyResponse = func(resp *http.Response) error {
 		var body []byte

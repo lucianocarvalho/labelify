@@ -38,7 +38,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 	for _, rule := range h.config.Enrichment.Rules {
 		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
 
-		// Find the source for this rule
 		var source *domain.Source
 		for _, s := range h.config.Sources {
 			if s.Name == rule.EnrichFrom {
@@ -52,7 +51,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 		}
 
 		for i, r := range resp.Data.Result {
-			// Check if this metric matches our rule
 			if !h.matchesMetric(r.Metric, rule.Match, originalQuery) {
 				continue
 			}
@@ -63,21 +61,18 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				continue
 			}
 
-			// Try to find a matching mapping
 			var matchedData *domain.SourceData
 			for pattern, data := range source.Mappings {
 				if pattern == labelValue {
 					matchedData = &data
 					break
 				}
-				// Try wildcard match
 				if matched, _ := regexp.MatchString(pattern, labelValue); matched {
 					matchedData = &data
 					break
 				}
 			}
 
-			// Apply the matched data or fallback
 			if matchedData != nil {
 				for _, label := range rule.AddLabels {
 					if value, ok := matchedData.Labels[label]; ok {
@@ -159,7 +154,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 				}
 			}
 
-			// Skip if we don't have any labels to group by
 			if len(groupKey) == 0 {
 				continue
 			}
@@ -178,7 +172,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 
 		var newResult []domain.MetricData
 		for groupKey, value := range groupedMetrics {
-			// Parse the group key back into a map
 			metric := make(map[string]string)
 			for _, pair := range strings.Split(groupKey, ",") {
 				if pair == "" {
@@ -202,7 +195,6 @@ func (h *HydrateUseCase) Execute(body []byte, originalQuery string) ([]byte, err
 }
 
 func (h *HydrateUseCase) matchesMetric(metric map[string]string, match domain.MatchRule, query string) bool {
-	// Verifica se a métrica está presente na query original
 	return strings.Contains(query, match.Metric)
 }
 
@@ -214,7 +206,6 @@ func (h *HydrateUseCase) createGroupKey(groupKey map[string]string) string {
 	}
 	sort.Strings(keys)
 
-	// Cria a chave ordenada
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, groupKey[k]))
