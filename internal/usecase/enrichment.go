@@ -22,11 +22,12 @@ func NewEnrichmentUseCase(config *domain.Config) (*EnrichmentUseCase, error) {
 	sourcesMap := make(map[string]domain.SourceProvider)
 
 	for _, sourceConfig := range config.Sources {
-		source, err := sources.NewSource(sourceConfig)
+		source := sourceConfig
+		provider, err := sources.NewSource(&source)
 		if err != nil {
-			return nil, fmt.Errorf("error creating source %s: %w", sourceConfig.Name, err)
+			return nil, fmt.Errorf("error creating source %s: %w", source.Name, err)
 		}
-		sourcesMap[sourceConfig.Name] = source
+		sourcesMap[source.Name] = provider
 	}
 
 	return &EnrichmentUseCase{
@@ -73,12 +74,12 @@ func (h *EnrichmentUseCase) enrichMetrics(resp *domain.QueryResponse, originalQu
 			continue
 		}
 
-		h.applyRule(resp, rule, mappings, originalQuery)
+		h.applyRule(resp, &rule, mappings, originalQuery)
 	}
 	return nil
 }
 
-func (h *EnrichmentUseCase) applyRule(resp *domain.QueryResponse, rule domain.EnrichmentRule, mappings map[string]domain.SourceData, originalQuery string) {
+func (h *EnrichmentUseCase) applyRule(resp *domain.QueryResponse, rule *domain.EnrichmentRule, mappings map[string]domain.SourceData, originalQuery string) {
 	for i, r := range resp.Data.Result {
 		if !h.matchesMetric(r.Metric, rule.Match, originalQuery) {
 			continue
@@ -106,7 +107,7 @@ func (h *EnrichmentUseCase) findMatchingData(labelValue string, mappings map[str
 	return nil
 }
 
-func (h *EnrichmentUseCase) applyLabels(resp *domain.QueryResponse, index int, matchedData *domain.SourceData, rule domain.EnrichmentRule) {
+func (h *EnrichmentUseCase) applyLabels(resp *domain.QueryResponse, index int, matchedData *domain.SourceData, rule *domain.EnrichmentRule) {
 	if matchedData != nil {
 		for _, label := range rule.AddLabels {
 			if value, ok := matchedData.Labels[label]; ok {
@@ -180,8 +181,8 @@ func (h *EnrichmentUseCase) buildGroupKey(metric map[string]string, labels []str
 	return h.createGroupKey(groupKey)
 }
 
-func (h *EnrichmentUseCase) mergeMatrixValues(existing, new [][]interface{}) {
-	for i, v := range new {
+func (h *EnrichmentUseCase) mergeMatrixValues(existing, values [][]interface{}) {
+	for i, v := range values {
 		if i >= len(existing) {
 			existing = append(existing, v)
 		} else {
@@ -192,14 +193,14 @@ func (h *EnrichmentUseCase) mergeMatrixValues(existing, new [][]interface{}) {
 	}
 }
 
-func (h *EnrichmentUseCase) mergeVectorValues(existing, new []interface{}) {
-	val1, _ := strconv.Atoi(new[1].(string))
+func (h *EnrichmentUseCase) mergeVectorValues(existing, values []interface{}) {
+	val1, _ := strconv.Atoi(values[1].(string))
 	val2, _ := strconv.Atoi(existing[1].(string))
 	existing[1] = strconv.Itoa(val1 + val2)
 }
 
 func (h *EnrichmentUseCase) createMatrixResult(groupedMetrics map[string][][]interface{}) []domain.MetricData {
-	var result []domain.MetricData
+	result := make([]domain.MetricData, 0, len(groupedMetrics))
 	for groupKey, values := range groupedMetrics {
 		result = append(result, domain.MetricData{
 			Metric: h.parseGroupKey(groupKey),
@@ -210,7 +211,7 @@ func (h *EnrichmentUseCase) createMatrixResult(groupedMetrics map[string][][]int
 }
 
 func (h *EnrichmentUseCase) createVectorResult(groupedMetrics map[string][]interface{}) []domain.MetricData {
-	var result []domain.MetricData
+	result := make([]domain.MetricData, 0, len(groupedMetrics))
 	for groupKey, value := range groupedMetrics {
 		result = append(result, domain.MetricData{
 			Metric: h.parseGroupKey(groupKey),
@@ -259,7 +260,7 @@ func (h *EnrichmentUseCase) getAllLabels(query string) []string {
 		}
 	}
 
-	var labels []string
+	labels := make([]string, 0, len(labelSet))
 	for label := range labelSet {
 		labels = append(labels, label)
 	}
@@ -277,7 +278,7 @@ func (h *EnrichmentUseCase) createGroupKey(groupKey map[string]string) string {
 	}
 	sort.Strings(keys)
 
-	var parts []string
+	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, groupKey[k]))
 	}

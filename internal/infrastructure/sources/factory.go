@@ -6,7 +6,7 @@ import (
 	"github.com/lucianocarvalho/labelify/internal/domain"
 )
 
-func NewSource(source domain.Source) (domain.SourceProvider, error) {
+func NewSource(source *domain.Source) (domain.SourceProvider, error) {
 	switch domain.SourceType(source.Type) {
 	case domain.SourceTypeYAML:
 		return NewYAMLSource(source.Name, source.Mappings), nil

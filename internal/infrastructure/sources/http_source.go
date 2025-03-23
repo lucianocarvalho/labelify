@@ -56,7 +56,7 @@ func (s *HTTPSource) Name() string {
 }
 
 func (s *HTTPSource) refresh() error {
-	req, err := http.NewRequest(s.config.Method, s.config.URL, nil)
+	req, err := http.NewRequest(s.config.Method, s.config.URL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
