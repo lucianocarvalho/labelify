@@ -30,7 +30,46 @@ And instead of listing the deployments directly, you might want to define an agg
 - All deployments starting with `prometheus-.*` belongs to `team="observability"`
 - All deployments starting with `microservices-.*` belongs to `team="engineering"`
 
-Instead of adding these labels directly to the ingestion pipeline using [relabel config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config), you can just create a Labelify's `mapping` specifying these rules:
+A common way to do this is using [label_replace](https://prometheus.io/docs/prometheus/latest/querying/functions/#label_replace):
+
+```
+promql> sum(
+  label_replace(                      # <-- label_replace fn
+    kube_deployment_spec_replicas,    # <----- Metric
+    "team",                           # <----- New created label
+    "observability",                  # <----- New created value
+    "deployment",                     # <----- Replacing this label
+    "prometheus-.*"                   # <----- When this pattern matches
+  )
+) by (team)                           # <-- Aggregation after the label_replace
+```
+
+This means that if you have multiple replacement rules, **you'll need to chain several label_replace functions together** — leading to overly complex, hard-to-read queries that are difficult to scale and maintain. Worse yet, you'll need to carefully nest them from the inside out before you can even perform any meaningful aggregation.
+
+```
+promql> sum(
+  label_replace(                         # <-- Second label_replace
+    label_replace(                       # <---- First label_replace 
+      kube_deployment_spec_replicas,     # <------- Metric
+      "team",                            # <------- New label
+      "observability",                   # <------- Value when matches prometheus
+      "deployment",                      # <------- Source label
+      "prometheus-.*"                    # <------- Regex match
+    ),
+    "team",                              # <---- team label
+    "engineering",                       # <---- team engineering
+    "deployment",                        # <---- Source label
+    "microservices-.*"                   # <---- Regex match
+  )
+) by (team)                              # <-- Aggregation after replacements
+
+{team="engineering"}                     3
+{team="observability"}                   2
+```
+
+That’s where **Labelify truly shines**!
+
+Instead of adding these labels directly to the ingestion pipeline using [relabel config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config) or using [label_replace](https://prometheus.io/docs/prometheus/latest/querying/functions/#label_replace), you can just create a Labelify's `mapping` specifying these rules:
 
 ```yml
 sources:
