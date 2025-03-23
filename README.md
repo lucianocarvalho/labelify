@@ -12,8 +12,6 @@ Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL
 
 ## What does Labelify do?
 
-> If you want step by step practical examples of how it works [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md). 
-
 Let's suppose you have a series of deployments running replicas on your cluster:
 
 ```
@@ -42,22 +40,22 @@ sources:
           team: engineering         # <----------- Team responsible for microservices
       prometheus-.*:                # <----- Wildcard for prometheus-.*
         labels:                     # <-------- Set of labels that can be used later
-          team: observability       # <-------- Team responsible for prometheus
+          team: observability       # <----------- Team responsible for prometheus
 ```
 
-You can have different sources (static and dynamic). These sources are responsible for just creating labels given a pattern (`mappings` indexes), which will later can be used in queries. Feel free to create as many labels as you want to represent the specified index (eg: `team`, `business_unit`, `cost_center`).
+You can have different sources (static and dynamic ones). These sources are responsible for just creating labels given a pattern (`mappings` indexes), which will later can be used in queries. Feel free to create as many labels as you want to represent the specified index (eg: `team`, `business_unit`, `cost_center`).
 
 With the mappings registered, we can now attach the sources to the queries:
 
 ```yml
 enrichment:
   rules:                                           # <-- List of rules
-    - match:                                       # <-- Match config
-        metric: "kube_deployment_spec_replicas"    # <---- Enrich this metric
-        label: "deployment"                        # <---- Rewriting this label
-      enrich_from: awesome-static-labels           # <-- Using this source name
+    - match:                                       # <---- Match config
+        metric: "kube_deployment_spec_replicas"    # <------- Enrich this metric
+        label: "deployment"                        # <------- Rewriting this label
+      enrich_from: awesome-static-labels           # <---- Using this source name
       add_labels:                                  
-        - team                                     # <-- To this label
+        - team                                     # <---- To this label
 ```
 
 This means that every time we have the `deployment` label as a response when running a query on metric `kube_deployment_spec_replicas`, Labelify is gonna replace the `deployment` label with the previously created `team` label:
@@ -97,8 +95,7 @@ Just like in yaml, Labelify expects the response from this endpoint to look some
 }
 ```
 
-Check [`enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md) for more step-to-step examples.
-
+> If you want step by step practical examples of how it works [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md). 
 
 You can **always** send promql-compatible queries to Labelify, whether they have rules or not. If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results. 
 

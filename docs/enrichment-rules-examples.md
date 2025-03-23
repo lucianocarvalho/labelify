@@ -179,3 +179,43 @@ promql> kube_deployment_spec_replicas
 promql> kube_deployment_created
 {business_unit="foundation"}                                5227825434
 ```
+
+## Dynamic sources
+
+You can also have dynamic label configurations.
+
+**config.yaml:**
+```yaml
+sources:
+  - name: dynamic_map
+    type: http
+    config:
+      url: https://run.mocky.io/v3/ba325f0c-f98e-4584-a4ec-966cecd3a773
+      method: GET
+      refresh_interval: 60s
+
+enrichment:
+  rules:
+    - match:
+        metric: "kube_deployment_spec_replicas"
+        label: "deployment"
+      enrich_from: static_map
+      add_labels:
+        - team
+```
+
+Just like in yaml, Labelify expects the response from this endpoint to look something like this:
+```json
+{
+  "microservice-.*": {
+    "labels": {
+      "team": "engineering"
+    }
+  },
+  "prometheus-.*": {
+    "labels": {
+      "team": "observability"
+    }
+  }
+}
+```
