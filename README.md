@@ -98,7 +98,7 @@ You can quickly get started using Docker:
 docker run -d \
   -p 8080:8080 \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
-  lucianoajunior/labelify:latest
+  ghcr.io/lucianocarvalho/labelify:latest
 
 # Testing proxy
 curl -XGET http://localhost:8080/api/v1/query?query=time()
