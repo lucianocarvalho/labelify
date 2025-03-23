@@ -54,6 +54,7 @@ enrichment:
       enrich_from: static_map
       add_labels:
         - team
+      # Fallback when there's no matches
       fallback:
         team: "unknown"
 ```
@@ -98,6 +99,9 @@ docker run -d \
   -p 8080:8080 \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
   lucianoajunior/labelify:latest
+
+# Testing proxy
+curl -XGET http://localhost:8080/api/v1/query?query=time()
 ```
 > **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/.
 
@@ -117,12 +121,6 @@ deployment.apps/labelify created
 service/labelify created
 ```
 
-Feel free to browse the resources:
-
-```bash
-kubectl get all -n labelify
-```
-
 > **⚠️ Important:** Don't forget to configure your prometheus url inside the `configmap/labelify-config`. The default configuration in this example is just proxying queries to http://prometheus.monitoring.svc.cluster.local:9090/.
 
 After configuring it correctly you can test it by running a command like this:
@@ -138,12 +136,15 @@ curl -XGET http://localhost:8080/api/v1/query?query=time()
 ### Running locally
 
 ```bash
-# Start by cloning the repository:
+# Start by cloning the repository
 git clone https://github.com/lucianocarvalho/labelify.git
 cd labelify
 
 # Running main.go
 go run cmd/api/main.go --config.file="$(PWD)/examples/config.yaml"
+
+# Testing proxy
+curl -XGET http://localhost:8080/api/v1/query?query=time()
 ```
 
 ## License

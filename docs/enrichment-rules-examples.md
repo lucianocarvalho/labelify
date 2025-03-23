@@ -9,7 +9,7 @@ Use it when you want to return **only** metrics that match the matchers you conf
 **config.yaml:**
 ```yaml
 sources:
-  - name: static_map
+  - name: static_map                                 # <-- Source name
     type: yaml
     mappings:
       coredns:                                       # <-- Matcher
