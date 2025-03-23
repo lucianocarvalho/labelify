@@ -35,53 +35,29 @@ func NewEnrichmentUseCase(config *domain.Config) (*EnrichmentUseCase, error) {
 	}, nil
 }
 
-func (h *EnrichmentUseCase) hasApplicableRules(query string, resp domain.QueryResponse) bool {
-	for _, rule := range h.config.Enrichment.Rules {
-		if !strings.Contains(query, rule.Match.Metric) {
-			continue
-		}
-
-		for _, r := range resp.Data.Result {
-			if _, ok := r.Metric[rule.Match.Label]; ok {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Nova função auxiliar para coletar todas as labels
-func (h *EnrichmentUseCase) getAllLabels(query string) []string {
-	labelSet := make(map[string]bool)
-	for _, rule := range h.config.Enrichment.Rules {
-		if strings.Contains(query, rule.Match.Metric) {
-			for _, label := range rule.AddLabels {
-				labelSet[label] = true
-			}
-		}
-	}
-
-	var labels []string
-	for label := range labelSet {
-		labels = append(labels, label)
-	}
-	return labels
-}
-
 func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, error) {
 	var resp domain.QueryResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		// Probably not a query response, just returning
 		return body, nil
 	}
 
 	if !h.hasApplicableRules(originalQuery, resp) {
-		// Nothing to do, no applicable rules found, just returning
 		return body, nil
 	}
 
 	log.Printf("Found applicable rules for query for query '%s': ", originalQuery)
 
+	if err := h.enrichMetrics(&resp, originalQuery); err != nil {
+		return body, nil
+	}
+
+	allLabels := h.getAllLabels(originalQuery)
+	h.aggregateMetrics(&resp, allLabels)
+
+	return json.Marshal(resp)
+}
+
+func (h *EnrichmentUseCase) enrichMetrics(resp *domain.QueryResponse, originalQuery string) error {
 	for _, rule := range h.config.Enrichment.Rules {
 		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
 
@@ -97,143 +73,197 @@ func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, 
 			continue
 		}
 
-		for i, r := range resp.Data.Result {
-			if !h.matchesMetric(r.Metric, rule.Match, originalQuery) {
-				continue
-			}
+		h.applyRule(resp, rule, mappings, originalQuery)
+	}
+	return nil
+}
 
-			labelValue := r.Metric[rule.Match.Label]
-			if labelValue == "" {
-				continue
-			}
+func (h *EnrichmentUseCase) applyRule(resp *domain.QueryResponse, rule domain.EnrichmentRule, mappings map[string]domain.SourceData, originalQuery string) {
+	for i, r := range resp.Data.Result {
+		if !h.matchesMetric(r.Metric, rule.Match, originalQuery) {
+			continue
+		}
 
-			var matchedData *domain.SourceData
-			for pattern, data := range mappings {
-				if pattern == labelValue {
-					matchedData = &data
-					break
-				}
-				if matched, _ := regexp.MatchString(pattern, labelValue); matched {
-					matchedData = &data
-					break
-				}
-			}
+		labelValue := r.Metric[rule.Match.Label]
+		if labelValue == "" {
+			continue
+		}
 
-			if matchedData != nil {
-				for _, label := range rule.AddLabels {
-					if value, ok := matchedData.Labels[label]; ok {
-						resp.Data.Result[i].Metric[label] = value
-					}
-				}
-			} else {
-				for label, value := range rule.Fallback {
-					resp.Data.Result[i].Metric[label] = value
-				}
-			}
+		matchedData := h.findMatchingData(labelValue, mappings)
+		h.applyLabels(resp, i, matchedData, rule)
+	}
+}
+
+func (h *EnrichmentUseCase) findMatchingData(labelValue string, mappings map[string]domain.SourceData) *domain.SourceData {
+	for pattern, data := range mappings {
+		if pattern == labelValue {
+			return &data
+		}
+		if matched, _ := regexp.MatchString(pattern, labelValue); matched {
+			return &data
 		}
 	}
+	return nil
+}
 
-	allLabels := h.getAllLabels(originalQuery)
+func (h *EnrichmentUseCase) applyLabels(resp *domain.QueryResponse, index int, matchedData *domain.SourceData, rule domain.EnrichmentRule) {
+	if matchedData != nil {
+		for _, label := range rule.AddLabels {
+			if value, ok := matchedData.Labels[label]; ok {
+				resp.Data.Result[index].Metric[label] = value
+			}
+		}
+	} else {
+		for label, value := range rule.Fallback {
+			resp.Data.Result[index].Metric[label] = value
+		}
+	}
+}
 
+func (h *EnrichmentUseCase) aggregateMetrics(resp *domain.QueryResponse, allLabels []string) {
 	switch resp.Data.ResultType {
 	case "matrix":
-		groupedMetrics := make(map[string][][]interface{})
-		for _, r := range resp.Data.Result {
-			groupKey := make(map[string]string)
-			for _, label := range allLabels { // Usar allLabels ao invés de h.config.Enrichment.Rules[0].AddLabels
-				if value, ok := r.Metric[label]; ok {
-					groupKey[label] = value
-				}
-			}
-
-			if len(groupKey) == 0 {
-				continue
-			}
-
-			groupKeyStr := h.createGroupKey(groupKey)
-
-			if values, exists := groupedMetrics[groupKeyStr]; exists {
-				for i, v := range r.Values {
-					if i >= len(values) {
-						values = append(values, v)
-					} else {
-						val1, _ := strconv.Atoi(v[1].(string))
-						val2, _ := strconv.Atoi(values[i][1].(string))
-						values[i][1] = strconv.Itoa(val1 + val2)
-					}
-				}
-			} else {
-				groupedMetrics[groupKeyStr] = r.Values
-			}
-		}
-
-		var newResult []domain.MetricData
-		for groupKey, values := range groupedMetrics {
-			metric := make(map[string]string)
-			for _, pair := range strings.Split(groupKey, ",") {
-				if pair == "" {
-					continue
-				}
-				parts := strings.Split(pair, "=")
-				if len(parts) == 2 {
-					metric[parts[0]] = parts[1]
-				}
-			}
-
-			newResult = append(newResult, domain.MetricData{
-				Metric: metric,
-				Values: values,
-			})
-		}
-		resp.Data.Result = newResult
-
+		h.aggregateMatrixMetrics(resp, allLabels)
 	case "vector":
-		groupedMetrics := make(map[string][]interface{})
-		for _, r := range resp.Data.Result {
-			groupKey := make(map[string]string)
-			for _, label := range allLabels {
-				if value, ok := r.Metric[label]; ok {
-					groupKey[label] = value
-				}
-			}
+		h.aggregateVectorMetrics(resp, allLabels)
+	}
+}
 
-			if len(groupKey) == 0 {
-				continue
-			}
-
-			groupKeyStr := h.createGroupKey(groupKey)
-
-			if value, exists := groupedMetrics[groupKeyStr]; exists {
-				val1, _ := strconv.Atoi(r.Value[1].(string))
-				val2, _ := strconv.Atoi(value[1].(string))
-				value[1] = strconv.Itoa(val1 + val2)
-			} else {
-				groupedMetrics[groupKeyStr] = r.Value
-			}
+func (h *EnrichmentUseCase) aggregateMatrixMetrics(resp *domain.QueryResponse, allLabels []string) {
+	groupedMetrics := make(map[string][][]interface{})
+	for _, r := range resp.Data.Result {
+		groupKey := h.buildGroupKey(r.Metric, allLabels)
+		if groupKey == "" {
+			continue
 		}
 
-		var newResult []domain.MetricData
-		for groupKey, value := range groupedMetrics {
-			metric := make(map[string]string)
-			for _, pair := range strings.Split(groupKey, ",") {
-				if pair == "" {
-					continue
-				}
-				parts := strings.Split(pair, "=")
-				if len(parts) == 2 {
-					metric[parts[0]] = parts[1]
-				}
-			}
-
-			newResult = append(newResult, domain.MetricData{
-				Metric: metric,
-				Value:  value,
-			})
+		if values, exists := groupedMetrics[groupKey]; exists {
+			h.mergeMatrixValues(values, r.Values)
+		} else {
+			groupedMetrics[groupKey] = r.Values
 		}
-		resp.Data.Result = newResult
 	}
 
-	return json.Marshal(resp)
+	resp.Data.Result = h.createMatrixResult(groupedMetrics)
+}
+
+func (h *EnrichmentUseCase) aggregateVectorMetrics(resp *domain.QueryResponse, allLabels []string) {
+	groupedMetrics := make(map[string][]interface{})
+	for _, r := range resp.Data.Result {
+		groupKey := h.buildGroupKey(r.Metric, allLabels)
+		if groupKey == "" {
+			continue
+		}
+
+		if value, exists := groupedMetrics[groupKey]; exists {
+			h.mergeVectorValues(value, r.Value)
+		} else {
+			groupedMetrics[groupKey] = r.Value
+		}
+	}
+
+	resp.Data.Result = h.createVectorResult(groupedMetrics)
+}
+
+func (h *EnrichmentUseCase) buildGroupKey(metric map[string]string, labels []string) string {
+	groupKey := make(map[string]string)
+	for _, label := range labels {
+		if value, ok := metric[label]; ok {
+			groupKey[label] = value
+		}
+	}
+
+	if len(groupKey) == 0 {
+		return ""
+	}
+
+	return h.createGroupKey(groupKey)
+}
+
+func (h *EnrichmentUseCase) mergeMatrixValues(existing, new [][]interface{}) {
+	for i, v := range new {
+		if i >= len(existing) {
+			existing = append(existing, v)
+		} else {
+			val1, _ := strconv.Atoi(v[1].(string))
+			val2, _ := strconv.Atoi(existing[i][1].(string))
+			existing[i][1] = strconv.Itoa(val1 + val2)
+		}
+	}
+}
+
+func (h *EnrichmentUseCase) mergeVectorValues(existing, new []interface{}) {
+	val1, _ := strconv.Atoi(new[1].(string))
+	val2, _ := strconv.Atoi(existing[1].(string))
+	existing[1] = strconv.Itoa(val1 + val2)
+}
+
+func (h *EnrichmentUseCase) createMatrixResult(groupedMetrics map[string][][]interface{}) []domain.MetricData {
+	var result []domain.MetricData
+	for groupKey, values := range groupedMetrics {
+		result = append(result, domain.MetricData{
+			Metric: h.parseGroupKey(groupKey),
+			Values: values,
+		})
+	}
+	return result
+}
+
+func (h *EnrichmentUseCase) createVectorResult(groupedMetrics map[string][]interface{}) []domain.MetricData {
+	var result []domain.MetricData
+	for groupKey, value := range groupedMetrics {
+		result = append(result, domain.MetricData{
+			Metric: h.parseGroupKey(groupKey),
+			Value:  value,
+		})
+	}
+	return result
+}
+
+func (h *EnrichmentUseCase) parseGroupKey(groupKey string) map[string]string {
+	metric := make(map[string]string)
+	for _, pair := range strings.Split(groupKey, ",") {
+		if pair == "" {
+			continue
+		}
+		parts := strings.Split(pair, "=")
+		if len(parts) == 2 {
+			metric[parts[0]] = parts[1]
+		}
+	}
+	return metric
+}
+
+func (h *EnrichmentUseCase) hasApplicableRules(query string, resp domain.QueryResponse) bool {
+	for _, rule := range h.config.Enrichment.Rules {
+		if !strings.Contains(query, rule.Match.Metric) {
+			continue
+		}
+
+		for _, r := range resp.Data.Result {
+			if _, ok := r.Metric[rule.Match.Label]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (h *EnrichmentUseCase) getAllLabels(query string) []string {
+	labelSet := make(map[string]bool)
+	for _, rule := range h.config.Enrichment.Rules {
+		if strings.Contains(query, rule.Match.Metric) {
+			for _, label := range rule.AddLabels {
+				labelSet[label] = true
+			}
+		}
+	}
+
+	var labels []string
+	for label := range labelSet {
+		labels = append(labels, label)
+	}
+	return labels
 }
 
 func (h *EnrichmentUseCase) matchesMetric(metric map[string]string, match domain.MatchRule, query string) bool {

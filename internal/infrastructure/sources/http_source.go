@@ -28,13 +28,10 @@ func NewHTTPSource(name string, config domain.SourceConfig) *HTTPSource {
 		},
 	}
 
-	// Fazer a primeira carga
 	if err := source.refresh(); err != nil {
-		// Log do erro, mas continua com mappings vazio
 		fmt.Printf("Error loading initial mappings for source %s: %v\n", name, err)
 	}
 
-	// Se tiver refresh interval configurado, iniciar o refresh periódico
 	if config.RefreshInterval != "" {
 		duration, err := time.ParseDuration(config.RefreshInterval)
 		if err != nil {
