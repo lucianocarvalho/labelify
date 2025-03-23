@@ -12,23 +12,23 @@ sources:
   - name: static_map
     type: yaml
     mappings:
-      coredns:                  # <-- Matcher
+      coredns:                                       # <-- Matcher
         labels:
-          team: networking      # <-- Rewrite
+          team: networking                           # <-- Rewrite
 
 enrichment:
   rules:
     - match:
-        metric: "kube_deployment_spec_replicas"
-        label: "deployment"
-      enrich_from: static_map
+        metric: "kube_deployment_spec_replicas"     # <-- Metric name
+        label: "deployment"                         # <-- Label that will be overwritten
+      enrich_from: static_map                       # <-- Source
       add_labels:
         - team
 ```
 
 **Default query/response:**
-```promql
-$ sum(kube_deployment_spec_replicas) by (deployment)
+```
+promql> sum(kube_deployment_spec_replicas) by (deployment)
 
 {deployment="prometheus-grafana"}                           1
 {deployment="prometheus-kube-prometheus-operator"}          1
@@ -38,13 +38,12 @@ $ sum(kube_deployment_spec_replicas) by (deployment)
 ```
 
 **Labelify response:**
+
+Since the source only has `coredns` as a mapping, all remaining deployments **are ignored**.
+
 ```
 {team="networking"}                                         1
 ```
-
-**Why?**
-
-Since the source only has `coredns` as a source, all remaining deployments are ignored.
 
 ## Wildcard
 
@@ -56,9 +55,9 @@ sources:
   - name: static_map
     type: yaml
     mappings:
-      prometheus-.*:            # <-- Wildcard
+      prometheus-.*:              # <-- Wildcard
         labels:
-          team: observability
+          team: observability     # <-- Label that will be overwritten
 
 enrichment:
   rules:
@@ -71,8 +70,8 @@ enrichment:
 ```
 
 **Default query/response:**
-```promql
-$ sum(kube_deployment_spec_replicas) by (deployment)
+```
+promql> sum(kube_deployment_spec_replicas) by (deployment)
 
 # Normal response
 {deployment="prometheus-grafana"}                           1
@@ -83,17 +82,16 @@ $ sum(kube_deployment_spec_replicas) by (deployment)
 ```
 
 **Labelify response:**
+
+It will respect the wildcard: everything that starts with `prometheus-` will be aggregated into the observability team. The other results **are ignored**.
+
 ```
 {team="observability"}                                      3
 ```
 
-**Why?**
-
-It will respect the wildcard: everything that starts with `prometheus-` will be aggregated into the observability team. The other deployments are ignored.
-
 ## Fallback
 
-Use when you want to return other data aggregated in another subgroup.
+Use when you want to return other data aggregated in a fallback group.
 
 **config.yaml:**
 ```yaml
@@ -101,9 +99,9 @@ sources:
   - name: static_map
     type: yaml
     mappings:
-      prometheus-.*:
+      prometheus-.*:            # <-- Wildcard
         labels:
-          team: observability
+          team: observability   # <-- Label that will be overwritten
 
 enrichment:
   rules:
@@ -118,8 +116,8 @@ enrichment:
 ```
 
 **Default query/response:**
-```promql
-$ sum(kube_deployment_spec_replicas) by (deployment)
+```
+promql> sum(kube_deployment_spec_replicas) by (deployment)
 
 # Normal response
 {deployment="prometheus-grafana"}                           1
@@ -130,11 +128,54 @@ $ sum(kube_deployment_spec_replicas) by (deployment)
 ```
 
 **Labelify response:**
+
+All deployments that don't have matchers will have their values aggregated within the label configured in `fallback`.
+
 ```
 {team="observability"}                                      3
 {team="unknown"}                                            2
 ```
 
-**Why?**
+## Selecting specific label
 
-All deployments that don't have matchers will have their values aggregated within the label configured in `fallback`.
+Use when you want to have more information for each mapping, but want to return a different result for each query.
+
+**config.yaml:**
+```yaml
+sources:
+  - name: static_map
+    type: yaml
+    mappings:
+      prometheus-.*:                              # <-- Wildcard
+        labels:
+          team: observability                     # <-- Label `team`
+          business_unit: foundation               # <-- Label `business_unit`
+
+enrichment:
+  rules:
+    - match:
+        metric: "kube_deployment_spec_replicas"   # <-- Query 1
+        label: "deployment"
+      enrich_from: static_map
+      add_labels:
+        - team                                    # <-- Using `team` label
+
+    - match:
+        metric: "kube_deployment_created"         # <-- Query 2
+        label: "deployment"
+      enrich_from: static_map
+      add_labels:
+        - business_unit                           # <-- Using `business_unit` label
+```
+
+**Labelify response:**
+
+The source map is the same. It will add the label `team` when the query is `kube_deployment_spec_replicas`, and it will add the label `business_unit` when the query is `kube_deployment_created`.
+
+```
+promql> kube_deployment_spec_replicas
+{team="observability"}                                      3
+
+promql> kube_deployment_created
+{business_unit="foundation"}                                5227825434
+```

@@ -12,12 +12,12 @@ Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL
 
 ## What does Labelify do?
 
-> If you want to see all practical and possible enrichment rule examples, [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md).
+> If you want step by step practical examples of how it works [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md). 
 
 Let's suppose you have a series of replicas running on your cluster:
 
 ```
-$ sum(kube_deployment_spec_replicas) by (deployment)
+promql> sum(kube_deployment_spec_replicas) by (deployment)
 
 {deployment="microservice-1"}                             1
 {deployment="microservice-2"}                             1
@@ -47,25 +47,24 @@ sources:
 enrichment:
   rules:
     - match:
+        # Query selected
         metric: "kube_deployment_spec_replicas"
+        # Label to be overwriten
         label: "deployment"
       enrich_from: static_map
       add_labels:
         - team
       fallback:
         team: "unknown"
-        business_unit: "n/a"
 ```
 
 Enriched response from Labelify:
 
 ```
-{team="observability"}              2        # `grafana` and `operator`
-{team="networking"}                 1        # `coredns`
-{team="unknown"}                    3        # `microservices-(1|2|3)`
+{team="observability"}              2        # prometheus-(grafana|operator)
+{team="unknown"}                    3        # microservices-(1|2|3)
+{team="networking"}                 1        # coredns
 ```
-
-Now your dashboards and alerts can group deployments by responsible team, without needing to change how metrics are collected or creating label replace rules.
 
 You can send all promql-compatible queries to Labelify, whether they have rules or not. If no rule matches the executed query (`match.metric`), seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results. 
 
@@ -110,7 +109,7 @@ Simply run:
 curl -s https://raw.githubusercontent.com/lucianocarvalho/labelify/main/k8s/manifest.yaml | kubectl apply -f -
 ```
 
-You should see output like this:
+You should get an output like this:
 ```  
 namespace/labelify created
 configmap/labelify-config created

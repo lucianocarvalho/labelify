@@ -37,6 +37,24 @@ func (h *EnrichmentUseCase) hasApplicableRules(query string, resp domain.QueryRe
 	return false
 }
 
+// Nova função auxiliar para coletar todas as labels
+func (h *EnrichmentUseCase) getAllLabels(query string) []string {
+	labelSet := make(map[string]bool)
+	for _, rule := range h.config.Enrichment.Rules {
+		if strings.Contains(query, rule.Match.Metric) {
+			for _, label := range rule.AddLabels {
+				labelSet[label] = true
+			}
+		}
+	}
+
+	var labels []string
+	for label := range labelSet {
+		labels = append(labels, label)
+	}
+	return labels
+}
+
 func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, error) {
 	var resp domain.QueryResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -103,12 +121,14 @@ func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, 
 		}
 	}
 
+	allLabels := h.getAllLabels(originalQuery)
+
 	switch resp.Data.ResultType {
 	case "matrix":
 		groupedMetrics := make(map[string][][]interface{})
 		for _, r := range resp.Data.Result {
 			groupKey := make(map[string]string)
-			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
+			for _, label := range allLabels { // Usar allLabels ao invés de h.config.Enrichment.Rules[0].AddLabels
 				if value, ok := r.Metric[label]; ok {
 					groupKey[label] = value
 				}
@@ -159,7 +179,7 @@ func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, 
 		groupedMetrics := make(map[string][]interface{})
 		for _, r := range resp.Data.Result {
 			groupKey := make(map[string]string)
-			for _, label := range h.config.Enrichment.Rules[0].AddLabels {
+			for _, label := range allLabels {
 				if value, ok := r.Metric[label]; ok {
 					groupKey[label] = value
 				}
