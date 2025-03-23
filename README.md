@@ -14,7 +14,7 @@ Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL
 
 > If you want step by step practical examples of how it works [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md). 
 
-Let's suppose you have a series of replicas running on your cluster:
+Let's suppose you have a series of deployments running replicas on your cluster:
 
 ```
 promql> sum(kube_deployment_spec_replicas) by (deployment)
@@ -24,50 +24,83 @@ promql> sum(kube_deployment_spec_replicas) by (deployment)
 {deployment="microservice-3"}                             1
 {deployment="prometheus-grafana"}                         1
 {deployment="prometheus-kube-prometheus-operator"}        1
-{deployment="coredns"}                                    1
 ```
 
-And you intend to write Labelify rules to group deployments by team:
+And instead of listing the deployments directly, you might want to define an aggregation where:
+- All deployments starting with `prometheus-.*` belongs to `team="observability"`
+- All deployments starting with `microservices-.*` belongs to `team="engineering"`
+
+Instead of adding these labels directly to the ingestion pipeline using [relabel config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config), you can just create a Labelify's `mapping` specifying these rules:
 
 ```yml
 sources:
-  - name: static_map
-    type: yaml
-    mappings:
-      # Using exact match for coredns
-      coredns:
-        labels:
-          team: networking
+  - name: awesome-static-labels     # <-- Source name (allowing having multiple sources)
+    type: yaml                      # <-- `yaml` means a static yaml
+    mappings:                       # <-- List of mappings (matchers)
+      microservices-.*:             # <----- Wildcard for microservices-.*
+        labels:                     # <-------- Set of labels that can be used later
+          team: engineering         # <----------- Team responsible for microservices
+      prometheus-.*:                # <----- Wildcard for prometheus-.*
+        labels:                     # <-------- Set of labels that can be used later
+          team: observability       # <-------- Team responsible for prometheus
+```
 
-      # Using wildcard to match all prometheus deployments
-      prometheus-.*:
-        labels:
-          team: observability
+You can have different sources (static and dynamic). These sources are responsible for just creating labels given a pattern (`mappings` indexes), which will later can be used in queries. Feel free to create as many labels as you want to represent the specified index (eg: `team`, `business_unit`, `cost_center`).
 
+With the mappings registered, we can now attach the sources to the queries:
+
+```yml
 enrichment:
-  rules:
-    - match:
-        # Query selected
-        metric: "kube_deployment_spec_replicas"
-        # Label to be overwriten
-        label: "deployment"
-      enrich_from: static_map
-      add_labels:
-        - team
-      # Fallback when there's no matches
-      fallback:
-        team: "unknown"
+  rules:                                           # <-- List of rules
+    - match:                                       # <-- Match config
+        metric: "kube_deployment_spec_replicas"    # <---- Enrich this metric
+        label: "deployment"                        # <---- Rewriting this label
+      enrich_from: awesome-static-labels           # <-- Using this source name
+      add_labels:                                  
+        - team                                     # <-- To this label
 ```
 
-Enriched response from Labelify:
+This means that every time we have the `deployment` label as a response when running a query on metric `kube_deployment_spec_replicas`, Labelify is gonna replace the `deployment` label with the previously created `team` label:
 
 ```
-{team="observability"}              2        # prometheus-(grafana|operator)
-{team="unknown"}                    3        # microservices-(1|2|3)
-{team="networking"}                 1        # coredns
+promql> sum(kube_deployment_spec_replicas) by (deployment)
+
+{team="engineering"}                3
+{team="observability"}              2
 ```
 
-You can send all promql-compatible queries to Labelify, whether they have rules or not. If no rule matches the executed query (`match.metric`), seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results. 
+Labelify also supports **dynamic sources** 🎉. This means that you can add labels to your queries at runtime, allowing you to use labels using your catalog sources dynamically (IDP, catalog-info.yaml, GitHub repository).
+
+```yml
+sources:
+  - name: awesome-catalog-service
+    type: http
+    config:
+      url: https://run.mocky.io/v3/ba325f0c-f98e-4584-a4ec-966cecd3a773
+      method: GET
+      refresh_interval: 60s
+```
+
+Just like in yaml, Labelify expects the response from this endpoint to look something like this:
+```json
+{
+  "microservice-.*": {
+    "labels": {
+      "team": "engineering"
+    }
+  },
+  "prometheus-.*": {
+    "labels": {
+      "team": "observability"
+    }
+  }
+}
+```
+
+Check [`enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md) for more step-to-step examples.
+
+
+You can **always** send promql-compatible queries to Labelify, whether they have rules or not. If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results. 
 
 We currently support both [instant vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#instant-vectors) and [range vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#range-vectors).
 
@@ -79,10 +112,10 @@ We currently support both [instant vectors](https://prometheus.io/docs/prometheu
 - Aggregate results dynamically based in your current labels
 - Creating conditions using expressions and templates (coming soon)
 
-**Supported data for rules:**
+**Supported sources for rules:**
 
-- Static mappings (defined in config.yaml)
-- External APIs (coming soon)
+- Static yaml mappings
+- External APIs
 - Other prometheus queries (coming soon)
 
 # 🚀 Installation
@@ -99,9 +132,6 @@ docker run -d \
   -p 8080:8080 \
   -v ./examples/config.yaml:/etc/labelify/config.yaml \
   ghcr.io/lucianocarvalho/labelify:latest
-
-# Testing proxy
-curl -XGET http://localhost:8080/api/v1/query?query=time()
 ```
 > **⚠️ Important:** You need to create your own config.yaml with the enrichment rules and label mappings. The default configuration in this example is just proxying queries to http://prometheus:9090/.
 
@@ -124,16 +154,6 @@ horizontalpodautoscaler.autoscaling/labelify created
 
 > **⚠️ Important:** Don't forget to configure your prometheus url inside the `configmap/labelify-config`. The default configuration in this example is just proxying queries to http://prometheus.monitoring.svc.cluster.local:9090/.
 
-After configuring it correctly you can test it by running a command like this:
-
-```bash
-# Port-forwarding
-kubectl port-forward service/labelify -n labelify 8080:80
-
-# Testing the proxy
-curl -XGET http://localhost:8080/api/v1/query?query=time()
-```
-
 ### Running locally
 
 ```bash
@@ -143,9 +163,6 @@ cd labelify
 
 # Running main.go
 go run cmd/api/main.go --config.file="$(PWD)/examples/config.yaml"
-
-# Testing proxy
-curl -XGET http://localhost:8080/api/v1/query?query=time()
 ```
 
 ## License

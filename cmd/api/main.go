@@ -18,7 +18,10 @@ func main() {
 		log.Fatalf("Error loading config from %s: %v", flags.ConfigFile, err)
 	}
 
-	enrichmentUseCase := usecase.NewEnrichmentUseCase(cfg)
+	enrichmentUseCase, err := usecase.NewEnrichmentUseCase(cfg)
+	if err != nil {
+		log.Fatalf("Error creating enrichment use case: %v", err)
+	}
 
 	proxy, err := infrastructure.NewProxy(cfg.Config.Prometheus.URL, enrichmentUseCase)
 	if err != nil {

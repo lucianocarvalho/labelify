@@ -10,16 +10,29 @@ import (
 	"strings"
 
 	"github.com/lucianocarvalho/labelify/internal/domain"
+	"github.com/lucianocarvalho/labelify/internal/infrastructure/sources"
 )
 
 type EnrichmentUseCase struct {
-	config *domain.Config
+	config  *domain.Config
+	sources map[string]domain.SourceProvider
 }
 
-func NewEnrichmentUseCase(config *domain.Config) *EnrichmentUseCase {
-	return &EnrichmentUseCase{
-		config: config,
+func NewEnrichmentUseCase(config *domain.Config) (*EnrichmentUseCase, error) {
+	sourcesMap := make(map[string]domain.SourceProvider)
+
+	for _, sourceConfig := range config.Sources {
+		source, err := sources.NewSource(sourceConfig)
+		if err != nil {
+			return nil, fmt.Errorf("error creating source %s: %w", sourceConfig.Name, err)
+		}
+		sourcesMap[sourceConfig.Name] = source
 	}
+
+	return &EnrichmentUseCase{
+		config:  config,
+		sources: sourcesMap,
+	}, nil
 }
 
 func (h *EnrichmentUseCase) hasApplicableRules(query string, resp domain.QueryResponse) bool {
@@ -72,16 +85,15 @@ func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, 
 	for _, rule := range h.config.Enrichment.Rules {
 		log.Printf("Evaluating rule for metric: %s", rule.Match.Metric)
 
-		var source *domain.Source
-		for _, s := range h.config.Sources {
-			if s.Name == rule.EnrichFrom {
-				source = &s
-				break
-			}
+		source, ok := h.sources[rule.EnrichFrom]
+		if !ok {
+			log.Printf("Source %s not found for rule", rule.EnrichFrom)
+			continue
 		}
 
-		if source == nil {
-			log.Printf("Source %s not found for rule", rule.EnrichFrom)
+		mappings, err := source.GetMappings()
+		if err != nil {
+			log.Printf("Error getting mappings from source %s: %v", rule.EnrichFrom, err)
 			continue
 		}
 
@@ -96,7 +108,7 @@ func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, 
 			}
 
 			var matchedData *domain.SourceData
-			for pattern, data := range source.Mappings {
+			for pattern, data := range mappings {
 				if pattern == labelValue {
 					matchedData = &data
 					break

@@ -22,7 +22,15 @@ type PortConfig struct {
 type Source struct {
 	Name     string                `json:"name" yaml:"name"`
 	Type     string                `json:"type" yaml:"type"`
-	Mappings map[string]SourceData `json:"mappings" yaml:"mappings"`
+	Config   SourceConfig          `json:"config,omitempty" yaml:"config,omitempty"`
+	Mappings map[string]SourceData `json:"mappings,omitempty" yaml:"mappings,omitempty"`
+}
+
+type SourceConfig struct {
+	URL             string            `json:"url" yaml:"url"`
+	Method          string            `json:"method" yaml:"method"`
+	Headers         map[string]string `json:"headers" yaml:"headers"`
+	RefreshInterval string            `json:"refresh_interval" yaml:"refresh_interval"`
 }
 
 type SourceData struct {
