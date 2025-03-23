@@ -8,6 +8,13 @@ Use it when you want to return **only** metrics that match the matchers you conf
 
 **config.yaml:**
 ```yaml
+
+config:
+  prometheus:
+    url: "http://prometheus:9090/"
+  server:
+    port: 8080
+
 sources:
   - name: static_map                                 # <-- Source name
     type: yaml
