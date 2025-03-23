@@ -10,7 +10,9 @@
 
 Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment, enabling more insightful dashboards, smarter alerts, and clearer operational context - without modifying your original metrics or creating ingestion configs.
 
-## 💡 What does Labelify do?
+## What does Labelify do?
+
+> If you want to see all practical and possible enrichment rule examples, [click here to check out `enrichment-rules-examples.md`](./docs/enrichment-rules-examples.md).
 
 Let's suppose you have a series of replicas running on your cluster:
 
@@ -36,13 +38,11 @@ sources:
       coredns:
         labels:
           team: networking
-          business_unit: platform
 
       # Using wildcard to match all prometheus deployments
       prometheus-.*:
         labels:
           team: observability
-          business_unit: platform
 
 enrichment:
   rules:
@@ -52,7 +52,6 @@ enrichment:
       enrich_from: static_map
       add_labels:
         - team
-        - business_unit
       fallback:
         team: "unknown"
         business_unit: "n/a"
@@ -61,14 +60,14 @@ enrichment:
 Enriched response from Labelify:
 
 ```
-{team="observability", business_unit="platform"}        2
-{team="networking", business_unit="platform"}           1
-{team="unknown", business_unit="n/a"}                   3
+{team="observability"}              2        # `grafana` and `operator`
+{team="networking"}                 1        # `coredns`
+{team="unknown"}                    3        # `microservices-(1|2|3)`
 ```
 
 Now your dashboards and alerts can group deployments by responsible team, without needing to change how metrics are collected or creating label replace rules.
 
-If no rule matches the executed query, seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results.
+You can send all promql-compatible queries to Labelify, whether they have rules or not. If no rule matches the executed query (`match.metric`), seamlessly falls back to acting as a transparent Prometheus-agnostic proxy - forwarding any query without interfering in your results. 
 
 We currently support both [instant vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#instant-vectors) and [range vectors](https://prometheus.io/docs/prometheus/latest/querying/api/#range-vectors).
 
@@ -76,7 +75,7 @@ We currently support both [instant vectors](https://prometheus.io/docs/prometheu
 
 **What Labelify can do (and what’s coming soon):**
 
-- Create new labels into your query results
+- Rewrite new labels into your query results
 - Aggregate results dynamically based in your current labels
 - Creating conditions using expressions and templates (coming soon)
 
