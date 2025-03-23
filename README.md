@@ -6,6 +6,8 @@
   </picture>
 </p>
 
+[![publish-version](https://github.com/lucianocarvalho/labelify/actions/workflows/docker-build.yml/badge.svg)](https://github.com/lucianocarvalho/labelify/actions/workflows/docker-build.yml)
+
 # Labelify
 
 Labelify is a lightweight, Prometheus-compatible proxy that enhances your PromQL query results using dynamic, rule-based label enrichment, enabling more insightful dashboards, smarter alerts, and clearer operational context - without modifying your original metrics or creating ingestion configs.
