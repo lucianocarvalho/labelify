@@ -119,6 +119,7 @@ namespace/labelify created
 configmap/labelify-config created
 deployment.apps/labelify created
 service/labelify created
+horizontalpodautoscaler.autoscaling/labelify created
 ```
 
 > **⚠️ Important:** Don't forget to configure your prometheus url inside the `configmap/labelify-config`. The default configuration in this example is just proxying queries to http://prometheus.monitoring.svc.cluster.local:9090/.

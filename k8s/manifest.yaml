@@ -34,8 +34,24 @@ spec:
       containers:
       - name: labelify
         image: ghcr.io/lucianocarvalho/labelify:latest
+        resources:
+          requests:
+            cpu: 100m
+            memory: "512Mi"
         ports:
         - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
         volumeMounts:
         - name: config
           mountPath: /etc/labelify
@@ -57,4 +73,24 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: labelify 
+    app: labelify
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: labelify
+  namespace: labelify
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: labelify
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75 
