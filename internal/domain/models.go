@@ -54,11 +54,13 @@ type MatchRule struct {
 }
 
 type QueryResponse struct {
-	Status string `json:"status" yaml:"status"`
-	Data   struct {
-		ResultType string       `json:"resultType" yaml:"result_type"`
-		Result     []MetricData `json:"result" yaml:"result"`
-	} `json:"data" yaml:"data"`
+	Status string    `json:"status" yaml:"status"`
+	Data   QueryData `json:"data" yaml:"data"`
+}
+
+type QueryData struct {
+	ResultType string       `json:"resultType" yaml:"result_type"`
+	Result     []MetricData `json:"result" yaml:"result"`
 }
 
 type MetricData struct {

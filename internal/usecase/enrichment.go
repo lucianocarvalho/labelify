@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -36,26 +35,21 @@ func NewEnrichmentUseCase(config *domain.Config) (*EnrichmentUseCase, error) {
 	}, nil
 }
 
-func (h *EnrichmentUseCase) Execute(body []byte, originalQuery string) ([]byte, error) {
-	var resp domain.QueryResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return body, nil
-	}
-
-	if !h.hasApplicableRules(originalQuery, resp) {
-		return body, nil
+func (h *EnrichmentUseCase) Execute(resp *domain.QueryResponse, originalQuery string) error {
+	if !h.hasApplicableRules(originalQuery, *resp) {
+		return nil
 	}
 
 	log.Printf("Found applicable rules for query for query '%s': ", originalQuery)
 
-	if err := h.enrichMetrics(&resp, originalQuery); err != nil {
-		return body, nil
+	if err := h.enrichMetrics(resp, originalQuery); err != nil {
+		return err
 	}
 
 	allLabels := h.getAllLabels(originalQuery)
-	h.aggregateMetrics(&resp, allLabels)
+	h.aggregateMetrics(resp, allLabels)
 
-	return json.Marshal(resp)
+	return nil
 }
 
 func (h *EnrichmentUseCase) enrichMetrics(resp *domain.QueryResponse, originalQuery string) error {

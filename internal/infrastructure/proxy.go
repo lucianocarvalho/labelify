@@ -3,13 +3,14 @@ package infrastructure
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 
+	"github.com/lucianocarvalho/labelify/internal/domain"
 	"github.com/lucianocarvalho/labelify/internal/usecase"
 )
 
@@ -28,6 +29,12 @@ func NewProxy(targetURL string, enrichment *usecase.EnrichmentUseCase) (*Proxy, 
 		proxy:      httputil.NewSingleHostReverseProxy(target),
 		enrichment: enrichment,
 	}, nil
+}
+
+func (p *Proxy) setResponseBody(resp *http.Response, body []byte) {
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 }
 
 func (p *Proxy) modifyResponse(resp *http.Response) error {
@@ -54,18 +61,25 @@ func (p *Proxy) modifyResponse(resp *http.Response) error {
 
 	resp.Body.Close()
 
-	query := resp.Request.URL.Query().Get("query")
-
-	newBody, err := p.enrichment.Execute(body, query)
-	if err != nil {
-		log.Printf("Erro ao executar enrichment: %v", err)
-		newBody = body
+	var queryResponse domain.QueryResponse
+	if err := json.Unmarshal(body, &queryResponse); err != nil {
+		p.setResponseBody(resp, body)
+		return nil
 	}
 
-	resp.Body = io.NopCloser(bytes.NewReader(newBody))
-	resp.ContentLength = int64(len(newBody))
-	resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
+	query := resp.Request.URL.Query().Get("query")
 
+	if err := p.enrichment.Execute(&queryResponse, query); err != nil {
+		p.setResponseBody(resp, body)
+		return nil
+	}
+
+	newBody, err := json.Marshal(queryResponse)
+	if err != nil {
+		return fmt.Errorf("error marshaling enriched response: %w", err)
+	}
+
+	p.setResponseBody(resp, newBody)
 	return nil
 }
 
